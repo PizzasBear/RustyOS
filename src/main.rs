@@ -17,7 +17,7 @@ pub fn panic(info: &PanicInfo) -> ! {
 
 #[no_mangle]
 pub fn _start() -> ! {
-    for i in 0..24 {
+    for i in 0..3 {
         println!("Hello World! {}", i);
     }
     loop {}

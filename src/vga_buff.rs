@@ -145,7 +145,7 @@ impl fmt::Write for Writer {
 }
 
 lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer::default());
+    static ref WRITER: Mutex<Writer> = Mutex::new(Writer::default());
 }
 
 #[doc(hidden)]
