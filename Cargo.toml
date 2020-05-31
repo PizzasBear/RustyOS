@@ -2,12 +2,13 @@
 name = "rustyos"
 version = "0.1.0"
 authors = ["PizzasBear <mx.sht06@gmail.com>"]
-edition = "2018"
 
 [package.metadata.bootimage]
 default-target = "rustyos.json"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-lib = ["staticlib"]
 
 [profile.dev]
 panic = "abort"
