@@ -1,7 +1,6 @@
-use volatile::Volatile;
-use core::fmt;
-use lazy_static::lazy_static;
+use core::{fmt, ptr::Unique};
 use spin::Mutex;
+use volatile::Volatile;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,7 +29,7 @@ pub enum Color {
 pub struct ColorCode(u8);
 
 impl ColorCode {
-    pub fn new(foreground: Color, background: Color) -> ColorCode {
+    pub const fn new(foreground: Color, background: Color) -> ColorCode {
         ColorCode((background as u8) << 4 | (foreground as u8))
     }
 }
@@ -53,7 +52,7 @@ struct Buffer {
 pub struct Writer {
     column_position: usize,
     row_position: usize,
-    buffer: &'static mut Buffer,
+    buffer: Unique<Buffer>,
     pub color_code: ColorCode,
 }
 
@@ -76,7 +75,7 @@ impl Writer {
         };
         for row in 0..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {
-                self.buffer.chars[row][col].write(blank);
+                self.buffer().chars[row][col].write(blank);
             }
         }
         self.row_position = 0;
@@ -91,26 +90,28 @@ impl Writer {
                     self.new_line();
                 }
 
-                self.buffer.chars[self.row_position][self.column_position].write(ScreenChar {
+                let (row, col) = (self.row_position, self.column_position);
+                let color_code = self.color_code;
+                self.buffer().chars[row][col].write(ScreenChar {
                     ascii_character: byte,
-                    color_code: self.color_code,
+                    color_code,
                 });
                 self.column_position += 1;
             }
         }
     }
-    
+
     fn new_line(&mut self) {
         self.column_position = 0;
         if self.row_position == BUFFER_HEIGHT - 1 {
             for row in 1..BUFFER_HEIGHT {
                 for col in 0..BUFFER_WIDTH {
-                    self.buffer.chars[row - 1][col].write(self.buffer.chars[row][col].read());
+                    let ascii_character = self.buffer().chars[row][col].read();
+                    self.buffer().chars[row - 1][col].write(ascii_character);
                 }
             }
             self.clear_row(BUFFER_HEIGHT - 1);
-        }
-        else {
+        } else {
             self.row_position += 1;
         }
     }
@@ -121,19 +122,12 @@ impl Writer {
             color_code: self.color_code,
         };
         for col in 0..BUFFER_WIDTH {
-            self.buffer.chars[row][col].write(blank);
+            self.buffer().chars[row][col].write(blank);
         }
     }
-}
 
-impl Default for Writer {
-    fn default() -> Self {
-        Self {
-            buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
-            color_code: ColorCode::new(Color::White, Color::Black),
-            column_position: 0,
-            row_position: 0,
-        }
+    fn buffer(&mut self) -> &mut Buffer {
+        unsafe { self.buffer.as_mut() }
     }
 }
 
@@ -144,11 +138,13 @@ impl fmt::Write for Writer {
     }
 }
 
-lazy_static! {
-    static ref WRITER: Mutex<Writer> = Mutex::new(Writer::default());
-}
+pub static WRITER: Mutex<Writer> = Mutex::new(Writer {
+    buffer: unsafe { Unique::new_unchecked(0xb8000 as *mut _) },
+    color_code: ColorCode::new(Color::White, Color::Black),
+    column_position: 0,
+    row_position: 0,
+});
 
-#[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
     WRITER.lock().write_fmt(args).unwrap();
@@ -156,11 +152,20 @@ pub fn _print(args: fmt::Arguments) {
 
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::vga_buff::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => {{
+        $crate::vga_buff::_print(format_args!($($arg)*));
+    }};
 }
 
 #[macro_export]
 macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+	() => ($crate::print!("\n"));
+	($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! clear {
+    () => {{
+        $crate::vga_buff::WRITER.lock().clear();
+    }};
 }
