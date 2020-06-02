@@ -20,4 +20,5 @@ crate-type = ["staticlib"]
 volatile = "0.2"
 # lazy_static = { version = "1.0", features = ["spin_no_std"] }
 spin = "0.5"
+multiboot2 = "0.8"
 

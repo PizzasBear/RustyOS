@@ -61,7 +61,7 @@ impl Writer {
         for byte in s.bytes() {
             match byte {
                 // printable ASCII byte or newline
-                0x20..=0x7e | b'\n' => self.print_byte(byte),
+                0x20..=0x7e | b'\n' | b'\t' => self.print_byte(byte),
                 // not part of printable ASCII range
                 _ => self.print_byte(0xfe),
             }
@@ -85,6 +85,12 @@ impl Writer {
     fn print_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => self.new_line(),
+            b'\t' => loop {
+                self.print_byte(b' ');
+                if self.column_position % 4 == 0 {
+                    break;
+                }
+            },
             byte => {
                 if self.column_position >= BUFFER_WIDTH {
                     self.new_line();
@@ -167,5 +173,16 @@ macro_rules! println {
 macro_rules! clear {
     () => {{
         $crate::vga_buff::WRITER.lock().clear();
+    }};
+}
+
+pub fn _printc(c: ColorCode) {
+    WRITER.lock().color_code = c;
+}
+
+#[macro_export]
+macro_rules! printc {
+    ($c:expr) => {{
+        $crate::vga_buff::_printc($c);
     }};
 }
